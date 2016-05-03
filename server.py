@@ -37,9 +37,6 @@ def synthesize():
     text = request.form.get('text', None)
     speaker = request.form.get('speaker', None)
 
-    print(text, file=sys.stderr)
-    print(speaker, file=sys.stderr)
-
     # get synthesized wave data from web api
     rec.speaker(speaker)
     wave_data = rec.get_wav(text)
