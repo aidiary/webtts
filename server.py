@@ -31,11 +31,17 @@ def get_speaker_list():
     return jsonify(speakers)
 
 
-@app.route('/synthesize', methods=['POST'])
+@app.route('/synthesize', methods=['GET', 'POST'])
 def synthesize():
     # get POST arguments
-    text = request.form.get('text', None)
-    speaker = request.form.get('speaker', None)
+    if request.method == 'POST':
+        text = request.form.get('text', None)
+        speaker = request.form.get('speaker', None)
+    else:
+        text = request.args.get('text', None)
+        speaker = request.args.get('speaker', None)
+
+    print(text, file=sys.stderr)
 
     # get synthesized wave data from web api
     rec.speaker(speaker)
@@ -44,6 +50,7 @@ def synthesize():
     # return wave data
     response = make_response(wave_data)
     response.headers['Content-Type'] = 'audio/wav'
+    response.headers['Content-Disposition'] = 'attachment; filename=data.wav'
 
     return response
 

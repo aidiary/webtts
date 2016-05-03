@@ -2,14 +2,15 @@ var isPlaying = false;
 var context = null;
 
 var synthButton = $("#synth_button");
+var saveButton = $("#save_button");
 
 $(function () {
     synthButton.click(function (e) {
         playSound();
     });
 
-    $("#save_button").click(function (e) {
-        console.log("save!");
+    saveButton.click(function (e) {
+        saveSound();
     })
 });
 
@@ -64,4 +65,11 @@ function playSound() {
             });
         };
     }
+}
+
+function saveSound() {
+    var text = $("#input_text").val();
+    var speaker = $("#speaker").val();
+    var url = "/synthesize?text=" + text + "&speaker=" + speaker;
+    window.location = url
 }
