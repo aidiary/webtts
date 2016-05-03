@@ -1,0 +1,184 @@
+# -*- coding: utf-8 -*-
+import json
+import requests
+
+TTS_URL = "https://try-api.recaius.jp/tts/v1/"
+
+
+class RecaiusTTS(object):
+    """Speech Synthesizer by RECAIUS-dev API"""
+    speaker2info = {
+        'イタル': ('ja_JP', 'ja_JP-M0001-H00T'),
+        'ヒロト': ('ja_JP', 'ja_JP-M0002-H01T'),
+        'モエ': ('ja_JP', 'ja_JP-F0005-U01T'),
+        'サクラ': ('ja_JP', 'ja_JP-F0006-C53T'),
+        'ジェーン': ('en_US', 'en_US-F0001-H00T'),
+        'ニコル': ('fr_FR', 'fr_FR-F0001-H00T'),
+        'ミヨン': ('ko_KR', 'ko_KR-F0001-H00T'),
+        'リンリー': ('zh_CN', 'zh_CN-en_US-F0002-H00T')
+    }
+
+    def __init__(self, recaius_id, recaius_password):
+        self.recaius_id = recaius_id
+        self.recaius_password = recaius_password
+
+        self._values = dict()
+        self._values['id'] = self.recaius_id
+        self._values['password'] = self.recaius_password
+
+        # default settings
+        lang, speaker_id = self.speaker2info['サクラ']
+        self._values['lang'] = lang
+        self._values['speaker_id'] = speaker_id
+        self._values['codec'] = 'audio/x-linear'  # for pyaudio
+
+        self.reset_parameters()
+
+    def clear_parameters(self):
+        self._values = dict()
+        self._values['id'] = self.recaius_id
+        self._values['password'] = self.recaius_password
+
+    def reset_parameters(self):
+        delete_keys = ['speed', 'pitch', 'depth', 'volume']
+        for k in delete_keys:
+            if k in self._values:
+                del self._values[k]
+
+    def reset_emotions(self):
+        delete_keys = ['happy', 'angry', 'sad', 'fear', 'tender']
+        for k in delete_keys:
+            if k in self._values:
+                del self._values[k]
+
+    def speaker(self, speaker):
+        if speaker in self.speaker2info:
+            lang, speaker_id = self.speaker2info[speaker]
+            self._values['lang'] = lang
+            self._values['speaker_id'] = speaker_id
+        else:
+            raise RecaiusTTSException('Unknown speaker: %s' % speaker)
+        return self
+
+    def emotion(self, emotion, level):
+        self.reset_emotions()
+        if emotion in ['happy', 'angry', 'sad', 'fear', 'tender']:
+            self._values[emotion] = level
+        else:
+            raise RecaiusTTSException('Unknown emotion: %s' % emotion)
+        return self
+
+    def speed(self, speed):
+        if -10 <= speed <= 10:
+            self._values["speed"] = speed
+        else:
+            raise RecaiusTTSException('Invalid speed: %d [-10, 10]' % speed)
+        return self
+
+    def pitch(self, pitch):
+        if -10 <= pitch <= 10:
+            self._values["pitch"] = pitch
+        else:
+            raise RecaiusTTSException('Invalid pitch: %d [-10, 10]' % pitch)
+        return self
+
+    def depth(self, depth):
+        if -4 <= depth <= 4:
+            self._values["depth"] = depth
+        else:
+            raise RecaiusTTSException('Invalid depth: %d [-4, 4]' % depth)
+        return self
+
+    def volume(self, volume):
+        if -50 <= volume <= 50:
+            self._values["volume"] = volume
+        else:
+            raise RecaiusTTSException('Invalid volume: %d [-50, 50]' % volume)
+        return self
+
+    def get_wav(self, text, is_phonetic=False):
+        if is_phonetic:
+            self._values['phonetic_text'] = text
+        else:
+            self._values['plain_text'] = text
+
+        response = self._text2speechwave(is_phonetic)
+        return response.content
+
+    def save_wav(self, text, wave_file, is_phonetic=False):
+        if is_phonetic:
+            self._values['phonetic_text'] = text
+        else:
+            self._values['plain_text'] = text
+
+        response = self._text2speechwave(is_phonetic)
+        with open(wave_file, "wb") as fp:
+            fp.write(response.content)
+
+    def get_speaker_list(self):
+        temp_values = dict()
+        temp_values['id'] = self.recaius_id
+        temp_values['password'] = self.recaius_password
+
+        headers = {'Content-Type': 'application/json'}
+        data = json.dumps(temp_values)
+        data = data.encode('utf-8')
+        response = requests.post(TTS_URL + 'get_speaker_list',
+                                 data=data,
+                                 headers=headers)
+        response.encoding = 'utf-8'
+        result = response.text
+
+        return result
+
+    def get_phonetic(self, plain_text, lang):
+        temp_values = dict()
+        temp_values['id'] = self.recaius_id
+        temp_values['password'] = self.recaius_password
+        temp_values['plain_text'] = plain_text
+        temp_values['lang'] = lang
+
+        headers = {'Content-Type': 'application/json'}
+        data = json.dumps(temp_values)
+        data = data.encode('utf-8')
+        response = requests.post(TTS_URL + 'plaintext2phonetictext',
+                                 data=data,
+                                 headers=headers)
+        phonetic_text = response.text
+
+        return phonetic_text
+
+    def _text2speechwave(self, is_phonetic=False):
+        # check necessary parameters
+        if 'id' not in self._values:
+            raise RecaiusTTSException('Missing parameter: id')
+        if 'password' not in self._values:
+            raise RecaiusTTSException('Missing parameter: password')
+        if is_phonetic:
+            if 'phonetic_text' not in self._values:
+                raise RecaiusTTSException('Missing parameter: phonetic_text')
+        else:
+            if 'plain_text' not in self._values:
+                raise RecaiusTTSException('Missing parameter: plain_text')
+        if 'lang' not in self._values:
+            raise RecaiusTTSException('Missing parameter: lang')
+        if 'speaker_id' not in self._values:
+            raise RecaiusTTSException('Missing parameter: speaker_id')
+
+        if is_phonetic:
+            function_name = 'phonetictext2speechwave'
+        else:
+            function_name = 'plaintext2speechwave'
+
+        headers = {'Content-Type': 'application/json'}
+        data = json.dumps(self._values)
+        data = data.encode('utf-8')
+        response = requests.post(TTS_URL + function_name,
+                                 data=data,
+                                 headers=headers)
+
+        return response
+
+
+class RecaiusTTSException(Exception):
+    pass
